@@ -1,0 +1,32 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: http-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      application: http-server
+  template:
+    metadata:
+      labels:
+        application: http-server
+    spec:
+      containers:
+      - name: server
+        env:
+        - name: SKUPPER_EXAMPLE_LATENCY
+          value: "10"
+        image: quay.io/ted_ross/skupper-http-server
+        imagePullPolicy: IfNotPresent
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myservice
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    application: http-server
