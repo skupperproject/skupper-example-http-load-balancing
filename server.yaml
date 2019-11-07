@@ -17,13 +17,13 @@ spec:
         env:
         - name: SKUPPER_EXAMPLE_LATENCY
           value: "10"
-        image: quay.io/ted_ross/skupper-http-server
+        image: quay.io/skupper/skupper-http-server
         imagePullPolicy: IfNotPresent
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: myservice
+  name: httpsvc
 spec:
   ports:
   - port: 8080

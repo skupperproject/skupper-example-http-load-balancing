@@ -18,6 +18,6 @@ spec:
         - name: SKUPPER_EXAMPLE_CONCURRENCY
           value: "50"
         - name: SKUPPER_EXAMPLE_SERVICE_NAME
-          value: "MYSERVICE"
-        image: quay.io/ted_ross/skupper-http-client
-        imagePullPolicy: IfNotPresent
+          value: "HTTPSVC"
+        image: quay.io/skupper/skupper-http-client
+        imagePullPolicy: Always
