@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: http-server
@@ -19,14 +19,3 @@ spec:
           value: "10"
         image: quay.io/skupper/skupper-http-server
         imagePullPolicy: IfNotPresent
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: httpsvc
-spec:
-  ports:
-  - port: 8080
-    targetPort: 8080
-  selector:
-    application: http-server

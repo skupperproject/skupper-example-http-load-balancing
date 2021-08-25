@@ -10,9 +10,10 @@ To complete this tutorial, do the following:
 * [Step 1: Set up the demo](#step-1-set-up-the-demo)
 * [Step 2: Deploy the Virtual Application Network](#step-2-deploy-the-virtual-application-network)
 * [Step 3: Deploy the HTTP service](#step-3-deploy-the-http-service)
-* [Step 4: Annotate HTTP service to join the Virtual Application Network](#step-4-annotate-http-service-to-join-the-virtual-application-network)
-* [Step 5: Deploy HTTP client](#step-5-deploy-http-client)
-* [Step 6: Review HTTP client metrics](#step-6-review-http-client-metrics)
+* [Step 4: Create Skupper service for the Virtual Application Network](#step-4-create-skupper-service-for-the-virtual-application-network)
+* [Step 5: Bind the Skupper service to the deployment target on the Virtual Application Network](#step-5-bind-the-skupper-service-to-the-deployment-target-on-the-virtual-application-network)
+* [Step 6: Deploy HTTP client](#step-6-deploy-http-client)
+* [Step 7: Review HTTP client metrics](#step-7-review-http-client-metrics)
 * [Cleaning up](#cleaning-up)
 * [Next steps](#next-steps)
 
@@ -48,38 +49,38 @@ While the detailed steps are not included here, this demonstration can alternati
 
 On each cluster, define the virtual application network and the connectivity for the peer clusters.
 
-1. In the terminal for the first public cluster, deploy the **public1** application router and create three connection tokens for connections from the **public2** cluster, the **private1** cluster and the **private2** cluster:
+1. In the terminal for the first public cluster, deploy the **public1** application router and create three connection tokens for linking from the **public2** cluster, the **private1** cluster and the **private2** cluster:
 
    ```bash
-   skupper init --id public1
-   skupper connection-token private1-to-public1-token.yaml
-   skupper connection-token private2-to-public1-token.yaml
-   skupper connection-token public2-to-public1-token.yaml
+   skupper init --site-name public1
+   skupper token create private1-to-public1-token.yaml
+   skupper token create private2-to-public1-token.yaml
+   skupper token create public2-to-public1-token.yaml
    ```
 
-2. In the terminal for the second public cluster, deploy the **public2** application router, create two connection tokens for connections from the **private1** and **private2** clusters, and connect to the **public1** cluster:
+2. In the terminal for the second public cluster, deploy the **public2** application router, create two connection tokens for linking from the **private1** and **private2** clusters, and link to the **public1** cluster:
 
    ```bash
-   skupper init --id public2
-   skupper connection-token private1-to-public2-token.yaml
-   skupper connection-token private2-to-public2-token.yaml
-   skupper connect public2-to-public1-token.yaml
+   skupper init --site-name public2
+   skupper token create private1-to-public2-token.yaml
+   skupper token create private2-to-public2-token.yaml
+   skupper link create public2-to-public1-token.yaml
    ```
 
-3. In the terminal for the first private cluster, deploy the **private1** application router and define its connections to the **public1** and **public2** clusters
+3. In the terminal for the first private cluster, deploy the **private1** application router and define its links to the **public1** and **public2** clusters
 
    ```bash
-   skupper init --edge --id private1
-   skupper connect private1-to-public1-token.yaml
-   skupper connect private1-to-public2-token.yaml
+   skupper init --site-name private1
+   skupper link create private1-to-public1-token.yaml
+   skupper link create private1-to-public2-token.yaml
    ```
 
-4. In the terminal for the second private cluster, deploy the **private2** application router and define its connections to the **public1** and **public2** clusters
+4. In the terminal for the second private cluster, deploy the **private2** application router and define its links to the **public1** and **public2** clusters
 
    ```bash
-   skupper init --edge --id private2
-   skupper connect private2-to-public1-token.yaml
-   skupper connect private2-to-public2-token.yaml
+   skupper init --site-name private2
+   skupper link create private2-to-public1-token.yaml
+   skupper link create private2-to-public2-token.yaml
    ```
 
 ## Step 3: Deploy the HTTP service
@@ -98,21 +99,35 @@ After creating the application router network, deploy the HTTP services. The **p
    kubectl apply -f ~/http-demo/skupper-example-http-load-balancing/server.yaml
    ```
 
-## Step 4: Annotate HTTP service to join to the Virtual Application Network
+## Step 4: Create Skupper service for the Virtual Application Network
 
-1. In the terminal for the **public1** cluster, annotate the httpsvc service:
-
-   ```bash
-   kubectl annotate service httpsvc skupper.io/proxy=http
-   ```
-
-2. In the terminal for the **private1** cluster, annotate the httpsvc service:
+1. In the terminal for the **public1** cluster, create the httpsvc service:
 
    ```bash
-   kubectl annotate service httpsvc skupper.io/proxy=http
+   skupper service create httpsvc 8080 --mapping http
    ```
 
-## Step 5: Deploy HTTP client
+2. In each of the cluster terminals, verify the service created is present
+
+   ```bash
+   skupper service status
+   ```
+
+## Step 5: Bind the Skupper service to the deployment target on the Virtual Application Network
+
+1. In the terminal for the **public1** cluster, bind the httpsvc to the http-server deployment:
+
+   ```bash
+   skupper service bind httpsvc deployment http-server
+   ```
+
+2. In the terminal for the **private1** cluster, bind the httpsvc to the http-server deployment:
+
+   ```bash
+   skupper service bind httpsvc deployment http-server
+   ```
+
+## Step 6: Deploy HTTP client
 
 1. In the terminal for the **public2** cluster, deploy the following:
 
@@ -126,7 +141,7 @@ After creating the application router network, deploy the HTTP services. The **p
    kubectl apply -f ~/http-demo/skupper-example-http-load-balancing/client.yaml
    ```
 
-## Step 6: Review HTTP client metrics
+## Step 7: Review HTTP client metrics
 
 The deployed http clients issue concurrent requests to the httpsvc. The http client
 monitors which of the http server pods deployed on the **public1** and **private1** clusters
