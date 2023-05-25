@@ -1,198 +1,588 @@
-# Deploying multiple http services for anycast access across cluster
+# Skupper HTTP load balancing
+
+[![main](https://github.com/skupperproject/skupper-example-hello-world/actions/workflows/main.yaml/badge.svg)](https://github.com/skupperproject/skupper-example-hello-world/actions/workflows/main.yaml)
+
+#### Deploying multiple http services for anycast access across cluster
+
+This example is part of a [suite of examples][examples] showing the
+different ways you can use [Skupper][website] to connect services
+across cloud providers, data centers, and edge sites.
+
+[website]: https://skupper.io/
+[examples]: https://skupper.io/examples/index.html
+
+#### Contents
+
+* [Overview](#overview)
+* [Prerequisites](#prerequisites)
+* [Step 1: Install the Skupper command-line tool](#step-1-install-the-skupper-command-line-tool)
+* [Step 2: Configure separate console sessions](#step-2-configure-separate-console-sessions)
+* [Step 3: Access your clusters](#step-3-access-your-clusters)
+* [Step 4: Set up your namespaces](#step-4-set-up-your-namespaces)
+* [Step 5: Install Skupper in your namespaces](#step-5-install-skupper-in-your-namespaces)
+* [Step 6: Check the status of your namespaces](#step-6-check-the-status-of-your-namespaces)
+* [Step 7: Link your namespaces](#step-7-link-your-namespaces)
+* [Step 8: Link the private clusters](#step-8-link-the-private-clusters)
+* [Step 9: Deploy the HTTP service](#step-9-deploy-the-http-service)
+* [Step 10: Expose the HTTP service](#step-10-expose-the-http-service)
+* [Step 11: Bind the service to the deployment](#step-11-bind-the-service-to-the-deployment)
+* [Step 12: Deploy the HTTP clients](#step-12-deploy-the-http-clients)
+* [Step 13: Review client logs](#step-13-review-client-logs)
+* [Accessing the web console](#accessing-the-web-console)
+* [Cleaning up](#cleaning-up)
+* [Summary](#summary)
+* [About this example](#about-this-example)
+
+## Overview
 
 This tutorial demonstrates how to deploy a set of http servers across multiple clusters and observe anycast application routing over a Virtual Application Network.
 
 In this tutorial, you will deploy http servers to both a public and a private cluster. You will also create http clients that will access the http servers via the same address. You will observe how the VAN supports anycast application addressing by balancing client requests across the https servers on both the public and private cluster.
 
-To complete this tutorial, do the following:
-
-* [Prerequisites](#prerequisites)
-* [Step 1: Set up the demo](#step-1-set-up-the-demo)
-* [Step 2: Deploy the Virtual Application Network](#step-2-deploy-the-virtual-application-network)
-* [Step 3: Deploy the HTTP service](#step-3-deploy-the-http-service)
-* [Step 4: Create Skupper service for the Virtual Application Network](#step-4-create-skupper-service-for-the-virtual-application-network)
-* [Step 5: Bind the Skupper service to the deployment target on the Virtual Application Network](#step-5-bind-the-skupper-service-to-the-deployment-target-on-the-virtual-application-network)
-* [Step 6: Deploy HTTP client](#step-6-deploy-http-client)
-* [Step 7: Review HTTP client metrics](#step-7-review-http-client-metrics)
-* [Cleaning up](#cleaning-up)
-* [Next steps](#next-steps)
-
 ## Prerequisites
 
-* The `kubectl` command-line tool, version 1.15 or later ([installation guide](https://kubernetes.io/docs/tasks/tools/install-kubectl/))
-* The `skupper` command-line tool, the latest version ([installation guide](https://skupper.io/start/index.html#step-1-install-the-skupper-command-line-tool-in-your-environment))
+* The `kubectl` command-line tool, version 1.15 or later
+  ([installation guide][install-kubectl])
 
-The basis for the demonstration is to depict the operation of multiple http server deployment in both a private and public cluster and http client access to the servers from any of the namespaces (public and private) on the Virtal Application Network. As an example, the cluster deployment might be comprised of:
+* Access to at least one Kubernetes cluster, from [any provider you
+  choose][kube-providers]
 
-* Two "private cloud" cluster running on your local machine or in a data center
-* Two public cloud clusters running in public cloud providers
+[install-kubectl]: https://kubernetes.io/docs/tasks/tools/install-kubectl/
+[kube-providers]: https://skupper.io/start/kubernetes.html
 
-While the detailed steps are not included here, this demonstration can alternatively be performed with four separate namespaces on a single cluster.
+## Step 1: Install the Skupper command-line tool
 
-## Step 1: Set up the demo
+The `skupper` command-line tool is the entrypoint for installing
+and configuring Skupper.  You need to install the `skupper`
+command only once for each development environment.
 
-1. On your local machine, make a directory for this tutorial and clone the example repo:
+On Linux or Mac, you can use the install script (inspect it
+[here][install-script]) to download and extract the command:
 
-   ```bash
-   mkdir http-demo
-   cd http-demo
-   git clone https://github.com/skupperproject/skupper-example-http-load-balancing.git
-   ```
+~~~ shell
+curl https://skupper.io/install.sh | sh
+~~~
 
-2. Prepare the target clusters.
+The script installs the command under your home directory.  It
+prompts you to add the command to your path if necessary.
 
-   1. On your local machine, log in to each cluster in a separate terminal session.
-   2. In each cluster, create a namespace to use for the demo.
-   3. In each cluster, set the kubectl config context to use the demo namespace [(see kubectl cheat sheet)](https://kubernetes.io/docs/reference/kubectl/cheatsheet/)
+For Windows and other installation options, see [Installing
+Skupper][install-docs].
 
-## Step 2: Deploy the Virtual Application Network
+[install-script]: https://github.com/skupperproject/skupper-website/blob/main/docs/install.sh
+[install-docs]: https://skupper.io/install/index.html
 
-On each cluster, define the virtual application network and the connectivity for the peer clusters.
+## Step 2: Configure separate console sessions
 
-1. In the terminal for the first public cluster, deploy the **public1** application router and create three connection tokens for linking from the **public2** cluster, the **private1** cluster and the **private2** cluster:
+Skupper is designed for use with multiple namespaces, usually on
+different clusters.  The `skupper` command uses your
+[kubeconfig][kubeconfig] and current context to select the
+namespace where it operates.
 
-   ```bash
-   skupper init --site-name public1
-   skupper token create private1-to-public1-token.yaml
-   skupper token create private2-to-public1-token.yaml
-   skupper token create public2-to-public1-token.yaml
-   ```
+[kubeconfig]: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
 
-2. In the terminal for the second public cluster, deploy the **public2** application router, create two connection tokens for linking from the **private1** and **private2** clusters, and link to the **public1** cluster:
+Your kubeconfig is stored in a file in your home directory.  The
+`skupper` and `kubectl` commands use the `KUBECONFIG` environment
+variable to locate it.
 
-   ```bash
-   skupper init --site-name public2
-   skupper token create private1-to-public2-token.yaml
-   skupper token create private2-to-public2-token.yaml
-   skupper link create public2-to-public1-token.yaml
-   ```
+A single kubeconfig supports only one active context per user.
+Since you will be using multiple contexts at once in this
+exercise, you need to create distinct kubeconfigs.
 
-3. In the terminal for the first private cluster, deploy the **private1** application router and define its links to the **public1** and **public2** clusters
+Start a console session for each of your namespaces.  Set the
+`KUBECONFIG` environment variable to a different path in each
+session.
 
-   ```bash
-   skupper init --site-name private1
-   skupper link create private1-to-public1-token.yaml
-   skupper link create private1-to-public2-token.yaml
-   ```
+_**Console for public1:**_
 
-4. In the terminal for the second private cluster, deploy the **private2** application router and define its links to the **public1** and **public2** clusters
+~~~ shell
+export KUBECONFIG=~/.kube/config-public1
+~~~
 
-   ```bash
-   skupper init --site-name private2
-   skupper link create private2-to-public1-token.yaml
-   skupper link create private2-to-public2-token.yaml
-   ```
+_**Console for public2:**_
 
-## Step 3: Deploy the HTTP service
+~~~ shell
+export KUBECONFIG=~/.kube/config-public2
+~~~
+
+_**Console for private1:**_
+
+~~~ shell
+export KUBECONFIG=~/.kube/config-private1
+~~~
+
+_**Console for private2:**_
+
+~~~ shell
+export KUBECONFIG=~/.kube/config-private2
+~~~
+
+## Step 3: Access your clusters
+
+The procedure for accessing a Kubernetes cluster varies by
+provider. [Find the instructions for your chosen
+provider][kube-providers] and use them to authenticate and
+configure access for each console session.
+
+[kube-providers]: https://skupper.io/start/kubernetes.html
+
+## Step 4: Set up your namespaces
+
+Use `kubectl create namespace` to create the namespaces you wish
+to use (or use existing namespaces).  Use `kubectl config
+set-context` to set the current namespace for each session.
+
+_**Console for public1:**_
+
+~~~ shell
+kubectl create namespace public1
+kubectl config set-context --current --namespace public1
+~~~
+
+_**Console for public2:**_
+
+~~~ shell
+kubectl create namespace public2
+kubectl config set-context --current --namespace public2
+~~~
+
+_**Console for private1:**_
+
+~~~ shell
+kubectl create namespace private1
+kubectl config set-context --current --namespace private1
+~~~
+
+_**Console for private2:**_
+
+~~~ shell
+kubectl create namespace private2
+kubectl config set-context --current --namespace private2
+~~~
+
+## Step 5: Install Skupper in your namespaces
+
+The `skupper init` command installs the Skupper router and service
+controller in the current namespace.  Run the `skupper init` command
+in each namespace.
+
+**Note:** If you are using Minikube, [you need to start `minikube
+tunnel`][minikube-tunnel] before you install Skupper.
+
+[minikube-tunnel]: https://skupper.io/start/minikube.html#running-minikube-tunnel
+
+_**Console for public1:**_
+
+~~~ shell
+skupper init --enable-console --enable-flow-collector
+~~~
+
+_**Console for public2:**_
+
+~~~ shell
+skupper init
+~~~
+
+_**Console for private1:**_
+
+~~~ shell
+skupper init
+~~~
+
+_**Console for private2:**_
+
+~~~ shell
+skupper init
+~~~
+
+_Sample output:_
+
+~~~ console
+$ skupper init
+Waiting for LoadBalancer IP or hostname...
+Skupper is now installed in namespace '<namespace>'.  Use 'skupper status' to get more information.
+~~~
+
+## Step 6: Check the status of your namespaces
+
+Use `skupper status` in each console to check that Skupper is
+installed.
+
+_**Console for public1:**_
+
+~~~ shell
+skupper status
+~~~
+
+_**Console for public2:**_
+
+~~~ shell
+skupper status
+~~~
+
+_**Console for private1:**_
+
+~~~ shell
+skupper status
+~~~
+
+_**Console for private2:**_
+
+~~~ shell
+skupper status
+~~~
+
+_Sample output:_
+
+~~~ console
+Skupper is enabled for namespace "<namespace>" in interior mode. It is connected to 1 other site. It has 1 exposed service.
+The site console url is: <console-url>
+The credentials for internal console-auth mode are held in secret: 'skupper-console-users'
+~~~
+
+As you move through the steps below, you can use `skupper status` at
+any time to check your progress.
+
+## Step 7: Link your namespaces
+
+Creating a link requires use of two `skupper` commands in
+conjunction, `skupper token create` and `skupper link create`.
+
+The `skupper token create` command generates a secret token that
+signifies permission to create a link.  The token also carries the
+link details.  Then, in a remote namespace, The `skupper link
+create` command uses the token to create a link to the namespace
+that generated it.
+
+**Note:** The link token is truly a *secret*.  Anyone who has the
+token can link to your namespace.  Make sure that only those you
+trust have access to it.
+
+First, use `skupper token create` in one namespace to generate the
+token.  Then, use `skupper link create` in the other to create a
+link.
+
+_**Console for public1:**_
+
+~~~ shell
+skupper token create ~/secret.token
+~~~
+
+_Sample output:_
+
+~~~ console
+$ skupper token create ~/secret.token
+Token written to ~/secret.token
+~~~
+
+_**Console for public2:**_
+
+~~~ shell
+skupper link create ~/secret.token
+~~~
+
+_Sample output:_
+
+~~~ console
+$ skupper link create ~/secret.token
+Site configured to link to https://10.105.193.154:8081/ed9c37f6-d78a-11ec-a8c7-04421a4c5042 (name=link1)
+Check the status of the link using 'skupper link status'.
+~~~
+
+If your console sessions are on different machines, you may need
+to use `sftp` or a similar tool to transfer the token securely.
+By default, tokens expire after a single use or 15 minutes after
+creation.
+
+## Step 8: Link the private clusters
+
+Use `skupper token create` 
+and create links
+
+_**Console for public1:**_
+
+~~~ shell
+skupper token create /tmp/public1.yaml --uses 2
+~~~
+
+_Sample output:_
+
+~~~ console
+$ skupper token create /tmp/public1.yaml --uses 2
+token created
+~~~
+
+_**Console for private1:**_
+
+~~~ shell
+skupper link create /tmp/public1.yaml
+~~~
+
+_Sample output:_
+
+~~~ console
+$ skupper link create /tmp/public1.yaml
+link created
+~~~
+
+_**Console for private2:**_
+
+~~~ shell
+skupper link create /tmp/public1.yaml
+~~~
+
+_Sample output:_
+
+~~~ console
+$ skupper link create /tmp/public1.yaml
+link created
+~~~
+
+## Step 9: Deploy the HTTP service
 
 After creating the application router network, deploy the HTTP services. The **private1** and **public1** clusters will be used to deploy the HTTP servers and the **public2** and **private2** clusters will be used to enable client http communications to the servers.
 
-1. In the terminal for the **public1** cluster, deploy the following:
+_**Console for public1:**_
 
-   ```bash
-   kubectl apply -f ~/http-demo/skupper-example-http-load-balancing/server.yaml
-   ```
+~~~ shell
+kubectl apply -f ./server.yaml
+~~~
 
-2. In the terminal for the **private1** cluster, deploy the following:
+_Sample output:_
 
-   ```bash
-   kubectl apply -f ~/http-demo/skupper-example-http-load-balancing/server.yaml
-   ```
+~~~ console
+$ kubectl apply -f ./server.yaml
+created
+~~~
 
-## Step 4: Create Skupper service for the Virtual Application Network
+_**Console for private1:**_
 
-1. In the terminal for the **public1** cluster, create the httpsvc service:
+~~~ shell
+kubectl apply -f ./server.yaml
+~~~
 
-   ```bash
-   skupper service create httpsvc 8080 --mapping http
-   ```
+_Sample output:_
 
-2. In each of the cluster terminals, verify the service created is present
+~~~ console
+$ kubectl apply -f ./server.yaml
+created
+~~~
 
-   ```bash
-   skupper service status
-   ```
+## Step 10: Expose the HTTP service
 
-## Step 5: Bind the Skupper service to the deployment target on the Virtual Application Network
+Use `skupper create` to create a service.
 
-1. In the terminal for the **public1** cluster, bind the httpsvc to the http-server deployment:
+_**Console for public1:**_
 
-   ```bash
-   skupper service bind httpsvc deployment http-server
-   ```
+~~~ shell
+skupper service create httpsvc 8080 --protocol tcp
+~~~
 
-2. In the terminal for the **private1** cluster, bind the httpsvc to the http-server deployment:
+_Sample output:_
 
-   ```bash
-   skupper service bind httpsvc deployment http-server
-   ```
+~~~ console
+$ skupper service create httpsvc 8080 --protocol tcp
+service created
+~~~
 
-## Step 6: Deploy HTTP client
+## Step 11: Bind the service to the deployment
 
-1. In the terminal for the **public2** cluster, deploy the following:
+Bind services to deployments
 
-   ```bash
-   kubectl apply -f ~/http-demo/skupper-example-http-load-balancing/client.yaml
-   ```
+_**Console for public1:**_
 
-2. In the terminal for the **private2** cluster, deploy the following:
+~~~ shell
+skupper service bind httpsvc deployment http-server
+~~~
 
-   ```bash
-   kubectl apply -f ~/http-demo/skupper-example-http-load-balancing/client.yaml
-   ```
+_Sample output:_
 
-## Step 7: Review HTTP client metrics
+~~~ console
+$ skupper service bind httpsvc deployment http-server
+bind
+~~~
 
-The deployed http clients issue concurrent requests to the httpsvc. The http client
-monitors which of the http server pods deployed on the **public1** and **private1** clusters
-served the request and calculates the rates per server-pod.
+_**Console for private1:**_
 
-1. In the terminal for the **public2** cluster, review the logs generated by the http client:
+~~~ shell
+skupper service bind httpsvc deployment http-server
+~~~
 
-   ```bash
-   kubectl logs $(kubectl get pod -l application=http-client -o=jsonpath='{.items[0].metadata.name}')
-   ```
+_Sample output:_
 
-2. In the terminal for the **private2** cluster, review the logs generated by the http client:
+~~~ console
+$ skupper service bind httpsvc deployment http-server
+bind
+~~~
 
-   ```bash
-   kubectl logs $(kubectl get pod -l application=http-client -o=jsonpath='{.items[0].metadata.name}')
-   ```
+## Step 12: Deploy the HTTP clients
 
-## Cleaning Up
+Deploy clients
 
-Restore your cluster environment by returning the resources created in the demonstration. On each cluster, delete the demo resources and the virtual application network:
+_**Console for public2:**_
 
-1. In the terminal for the **public1** cluster, delete the resources:
+~~~ shell
+kubectl apply -f ./client.yaml
+~~~
 
-   ```bash
-   $ kubectl delete -f ~/http-demo/skupper-example-http-load-balancing/server.yaml
-   $ skupper delete
-   ```
+_Sample output:_
 
-2. In the terminal for the **public2** cluster, delete the resources:
+~~~ console
+$ kubectl apply -f ./client.yaml
+bind
+~~~
 
-   ```bash
-   $ kubectl delete -f ~/http-demo/skupper-example-http-load-balancing/client.yaml
-   $ skupper delete
-   ```
+_**Console for private2:**_
 
-3. In the terminal for the **private1** cluster, delete the resources:
+~~~ shell
+kubectl apply -f ./client.yaml
+~~~
 
-   ```bash
-   $ kubectl delete -f ~/http-demo/skupper-example-http-load-balancing/server.yaml
-   $ skupper delete
-   ```
+_Sample output:_
 
-4. In the terminal for the **private2** cluster, delete the resources:
+~~~ console
+$ kubectl apply -f ./client.yaml
+bind
+~~~
 
-   ```bash
-   $ kubectl delete -f ~/http-demo/skupper-example-http-load-balancing/client.yaml
-   $ skupper delete
-   ```
+## Step 13: Review client logs
+
+Write client logs to /tmp
+
+_**Console for public2:**_
+
+~~~ shell
+kubectl logs $(kubectl get pod -l application=http-client -o=jsonpath='{.items[0].metadata.name}')
+~~~
+
+_Sample output:_
+
+~~~ console
+$ kubectl logs $(kubectl get pod -l application=http-client -o=jsonpath='{.items[0].metadata.name}')
+Service Name: HTTPSVC
+Service Host: 10.105.108.176
+Service Port: 8080
+Configured concurrency: 50
+Query URL: http://10.105.108.176:8080/request
+
+======== Rates per server-pod ========
+http-server-774567c64f-n2qt9: 75.5
+http-server-774567c64f-qw9kw: 84.5
+http-server-774567c64f-2mm88: 87
+http-server-774567c64f-mxfhx: 73
+~~~
+
+_**Console for private2:**_
+
+~~~ shell
+kubectl logs $(kubectl get pod -l application=http-client -o=jsonpath='{.items[0].metadata.name}')
+~~~
+
+_Sample output:_
+
+~~~ console
+$ kubectl logs $(kubectl get pod -l application=http-client -o=jsonpath='{.items[0].metadata.name}')
+Service Name: HTTPSVC
+Service Host: 10.105.108.176
+Service Port: 8080
+Configured concurrency: 50
+Query URL: http://10.105.108.176:8080/request
+
+======== Rates per server-pod ========
+http-server-774567c64f-n2qt9: 75.5
+http-server-774567c64f-qw9kw: 84.5
+http-server-774567c64f-2mm88: 87
+http-server-774567c64f-mxfhx: 73
+~~~
+
+## Accessing the web console
+
+Skupper includes a web console you can use to view the application
+network.  To access it, use `skupper status` to look up the URL of
+the web console.  Then use `kubectl get
+secret/skupper-console-users` to look up the console admin
+password.
+
+**Note:** The `<console-url>` and `<password>` fields in the
+following output are placeholders.  The actual values are specific
+to your environment.
+
+_**Console for public1:**_
+
+~~~ shell
+skupper status
+kubectl get secret/skupper-console-users -o jsonpath={.data.admin} | base64 -d
+~~~
+
+_Sample output:_
+
+~~~ console
+$ skupper status
+Skupper is enabled for namespace "public1" in interior mode. It is connected to 1 other site. It has 1 exposed service.
+The site console url is: <console-url>
+The credentials for internal console-auth mode are held in secret: 'skupper-console-users'
+
+$ kubectl get secret/skupper-console-users -o jsonpath={.data.admin} | base64 -d
+<password>
+~~~
+
+Navigate to `<console-url>` in your browser.  When prompted, log
+in as user `admin` and enter the password.
+
+## Cleaning up
+
+To remove Skupper and the other resources from this exercise, use
+the following commands.
+
+_**Console for public1:**_
+
+~~~ shell
+skupper delete
+kubectl delete service/frontend
+kubectl delete deployment/frontend
+~~~
+
+_**Console for private1:**_
+
+~~~ shell
+skupper delete
+kubectl delete deployment/backend
+~~~
+
+## Summary
+
+This example locates the frontend and backend services in different
+namespaces, on different clusters.  Ordinarily, this means that they
+have no way to communicate unless they are exposed to the public
+internet.
+
+Introducing Skupper into each namespace allows us to create a virtual
+application network that can connect services in different clusters.
+Any service exposed on the application network is represented as a
+local service in all of the linked namespaces.
+
+The backend service is located in `east`, but the frontend service
+in `west` can "see" it as if it were local.  When the frontend
+sends a request to the backend, Skupper forwards the request to the
+namespace where the backend is running and routes the response back to
+the frontend.
+
+<img src="images/sequence.svg" width="640"/>
 
 ## Next steps
 
- - [Try the Bookinfo example for distributing application http services](https://github.com/skupperproject/skupper-example-bookinfo)
- - [Try the Hipster Shop example for distributing application microservices](https://github.com/skupperproject/skupper-example-microservices)
- - [Find more examples](https://skupper.io/examples/)
+Check out the other [examples][examples] on the Skupper website.
+
+## About this example
+
+This example was produced using [Skewer][skewer], a library for
+documenting and testing Skupper examples.
+
+[skewer]: https://github.com/skupperproject/skewer
+
+Skewer provides utility functions for generating the README and
+running the example steps.  Use the `./plano` command in the project
+root to see what is available.
+
+To quickly stand up the example using Minikube, try the `./plano demo`
+command.
