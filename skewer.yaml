@@ -45,7 +45,7 @@ steps:
       link.
     commands:
       public1:
-        - run: skupper token create /tmp/public1.yaml --uses 2
+        - run: skupper token create /tmp/public1.yaml --uses 3
           output: Token written to ~/secret.token
       public2:
         - run: skupper link create /tmp/public1.yaml
@@ -81,7 +81,6 @@ steps:
     commands:
       public1:
         - run: skupper service create httpsvc 8080 --protocol http
-          output: 
   - title: Bind the service to the deployment
     preamble: |
       Bind the new service to the HTTP server deployments.
@@ -89,11 +88,9 @@ steps:
       public1:
         - await: deployment/http-server
         - run: skupper service bind httpsvc deployment http-server
-          output: 
       private1:
         - await: deployment/http-server
         - run: skupper service bind httpsvc deployment http-server
-          output: bind
   - title: Deploy the HTTP clients
     preamble: |
       In the **private2** and **public2** clusters, use the `kubectl apply` command

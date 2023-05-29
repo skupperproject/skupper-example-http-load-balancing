@@ -22,12 +22,11 @@ across cloud providers, data centers, and edge sites.
 * [Step 5: Install Skupper in your namespaces](#step-5-install-skupper-in-your-namespaces)
 * [Step 6: Check the status of your namespaces](#step-6-check-the-status-of-your-namespaces)
 * [Step 7: Link your namespaces](#step-7-link-your-namespaces)
-* [Step 8: Link the private clusters](#step-8-link-the-private-clusters)
-* [Step 9: Deploy the HTTP service](#step-9-deploy-the-http-service)
-* [Step 10: Expose the HTTP service](#step-10-expose-the-http-service)
-* [Step 11: Bind the service to the deployment](#step-11-bind-the-service-to-the-deployment)
-* [Step 12: Deploy the HTTP clients](#step-12-deploy-the-http-clients)
-* [Step 13: Review client logs](#step-13-review-client-logs)
+* [Step 8: Deploy the HTTP servers](#step-8-deploy-the-http-servers)
+* [Step 9: Expose the HTTP servers](#step-9-expose-the-http-servers)
+* [Step 10: Bind the service to the deployment](#step-10-bind-the-service-to-the-deployment)
+* [Step 11: Deploy the HTTP clients](#step-11-deploy-the-http-clients)
+* [Step 12: Review the client logs](#step-12-review-the-client-logs)
 * [Accessing the web console](#accessing-the-web-console)
 * [Cleaning up](#cleaning-up)
 * [Summary](#summary)
@@ -259,57 +258,34 @@ token can link to your namespace.  Make sure that only those you
 trust have access to it.
 
 First, use `skupper token create` in one namespace to generate the
-token.  Then, use `skupper link create` in the other to create a
+token.  Then, use `skupper link create` in the other namespaces to create a
 link.
 
 _**Console for public1:**_
 
 ~~~ shell
-skupper token create ~/secret.token
+skupper token create /tmp/public1.yaml --uses 3
 ~~~
 
 _Sample output:_
 
 ~~~ console
-$ skupper token create ~/secret.token
+$ skupper token create /tmp/public1.yaml --uses 3
 Token written to ~/secret.token
 ~~~
 
 _**Console for public2:**_
 
 ~~~ shell
-skupper link create ~/secret.token
+skupper link create /tmp/public1.yaml
 ~~~
 
 _Sample output:_
 
 ~~~ console
-$ skupper link create ~/secret.token
+$ skupper link create /tmp/public1.yaml
 Site configured to link to https://10.105.193.154:8081/ed9c37f6-d78a-11ec-a8c7-04421a4c5042 (name=link1)
 Check the status of the link using 'skupper link status'.
-~~~
-
-If your console sessions are on different machines, you may need
-to use `sftp` or a similar tool to transfer the token securely.
-By default, tokens expire after a single use or 15 minutes after
-creation.
-
-## Step 8: Link the private clusters
-
-Use `skupper token create` 
-and create links
-
-_**Console for public1:**_
-
-~~~ shell
-skupper token create /tmp/public1.yaml --uses 2
-~~~
-
-_Sample output:_
-
-~~~ console
-$ skupper token create /tmp/public1.yaml --uses 2
-token created
 ~~~
 
 _**Console for private1:**_
@@ -322,7 +298,8 @@ _Sample output:_
 
 ~~~ console
 $ skupper link create /tmp/public1.yaml
-link created
+Site configured to link to https://10.105.193.154:8081/ed9c37f6-d78a-11ec-a8c7-04421a4c5042 (name=link1)
+Check the status of the link using 'skupper link status'.
 ~~~
 
 _**Console for private2:**_
@@ -335,12 +312,14 @@ _Sample output:_
 
 ~~~ console
 $ skupper link create /tmp/public1.yaml
-link created
+Site configured to link to https://10.105.193.154:8081/ed9c37f6-d78a-11ec-a8c7-04421a4c5042 (name=link1)
+Check the status of the link using 'skupper link status'.
 ~~~
 
-## Step 9: Deploy the HTTP service
+## Step 8: Deploy the HTTP servers
 
-After creating the application router network, deploy the HTTP services. The **private1** and **public1** clusters will be used to deploy the HTTP servers and the **public2** and **private2** clusters will be used to enable client http communications to the servers.
+In the **private1** and **public1** clusters, use the `kubectl apply` command
+to install the servers.
 
 _**Console for public1:**_
 
@@ -352,7 +331,7 @@ _Sample output:_
 
 ~~~ console
 $ kubectl apply -f ./server.yaml
-created
+deployment.apps/http-server created
 ~~~
 
 _**Console for private1:**_
@@ -365,41 +344,27 @@ _Sample output:_
 
 ~~~ console
 $ kubectl apply -f ./server.yaml
-created
+deployment.apps/http-server created
 ~~~
 
-## Step 10: Expose the HTTP service
+## Step 9: Expose the HTTP servers
 
-Use `skupper create` to create a service.
+Use `skupper create` to create a service that is accessible from any site.
 
 _**Console for public1:**_
 
 ~~~ shell
-skupper service create httpsvc 8080 --protocol tcp
+skupper service create httpsvc 8080 --protocol http
 ~~~
 
-_Sample output:_
+## Step 10: Bind the service to the deployment
 
-~~~ console
-$ skupper service create httpsvc 8080 --protocol tcp
-service created
-~~~
-
-## Step 11: Bind the service to the deployment
-
-Bind services to deployments
+Bind the new service to the HTTP server deployments.
 
 _**Console for public1:**_
 
 ~~~ shell
 skupper service bind httpsvc deployment http-server
-~~~
-
-_Sample output:_
-
-~~~ console
-$ skupper service bind httpsvc deployment http-server
-bind
 ~~~
 
 _**Console for private1:**_
@@ -408,16 +373,10 @@ _**Console for private1:**_
 skupper service bind httpsvc deployment http-server
 ~~~
 
-_Sample output:_
+## Step 11: Deploy the HTTP clients
 
-~~~ console
-$ skupper service bind httpsvc deployment http-server
-bind
-~~~
-
-## Step 12: Deploy the HTTP clients
-
-Deploy clients
+In the **private2** and **public2** clusters, use the `kubectl apply` command
+to install the clients.
 
 _**Console for public2:**_
 
@@ -429,7 +388,7 @@ _Sample output:_
 
 ~~~ console
 $ kubectl apply -f ./client.yaml
-bind
+deployment.apps/http-client created
 ~~~
 
 _**Console for private2:**_
@@ -442,12 +401,14 @@ _Sample output:_
 
 ~~~ console
 $ kubectl apply -f ./client.yaml
-bind
+deployment.apps/http-client created
 ~~~
 
-## Step 13: Review client logs
+## Step 12: Review the client logs
 
-Write client logs to /tmp
+The client pods contain logs showing which server reponded to requests.
+Use the `kubectl logs` command to inspect these logs and see how the traffic
+was balanced.
 
 _**Console for public2:**_
 
@@ -538,36 +499,36 @@ _**Console for public1:**_
 
 ~~~ shell
 skupper delete
-kubectl delete service/frontend
-kubectl delete deployment/frontend
+kubectl delete -f ./server.yaml
 ~~~
 
 _**Console for private1:**_
 
 ~~~ shell
 skupper delete
-kubectl delete deployment/backend
+kubectl delete -f ./server.yaml
+~~~
+
+_**Console for public2:**_
+
+~~~ shell
+skupper delete
+kubectl delete -f ./client.yaml
+~~~
+
+_**Console for private2:**_
+
+~~~ shell
+skupper delete
+kubectl delete -f ./client.yaml
 ~~~
 
 ## Summary
 
-This example locates the frontend and backend services in different
-namespaces, on different clusters.  Ordinarily, this means that they
-have no way to communicate unless they are exposed to the public
-internet.
-
-Introducing Skupper into each namespace allows us to create a virtual
-application network that can connect services in different clusters.
-Any service exposed on the application network is represented as a
-local service in all of the linked namespaces.
-
-The backend service is located in `east`, but the frontend service
-in `west` can "see" it as if it were local.  When the frontend
-sends a request to the backend, Skupper forwards the request to the
-namespace where the backend is running and routes the response back to
-the frontend.
-
-<img src="images/sequence.svg" width="640"/>
+This example shows how you can deploy HTTP servers in private
+and public clusters. Using Skupper you can then call those 
+servers from private and public clusters and achieve load 
+balancing for the requests.
 
 ## Next steps
 
