@@ -354,7 +354,7 @@ Use `skupper create` to create a service that is accessible from any site.
 _**Console for public1:**_
 
 ~~~ shell
-skupper service create httpsvc 8080 --protocol http
+skupper service create httpsvc 8080
 ~~~
 
 ## Step 10: Bind the service to the deployment
