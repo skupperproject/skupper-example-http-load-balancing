@@ -80,7 +80,7 @@ steps:
       Use `skupper create` to create a service that is accessible from any site.
     commands:
       public1:
-        - run: skupper service create httpsvc 8080 --protocol http
+        - run: skupper service create httpsvc 8080
   - title: Bind the service to the deployment
     preamble: |
       Bind the new service to the HTTP server deployments.
