@@ -2,7 +2,7 @@
 
 [![main](https://github.com/skupperproject/skupper-example-hello-world/actions/workflows/main.yaml/badge.svg)](https://github.com/skupperproject/skupper-example-hello-world/actions/workflows/main.yaml)
 
-#### Deploying multiple http services for anycast access across cluster
+#### Deploying multiple HTTP services and load balancing across clusters
 
 This example is part of a [suite of examples][examples] showing the
 different ways you can use [Skupper][website] to connect services
@@ -34,9 +34,9 @@ across cloud providers, data centers, and edge sites.
 
 ## Overview
 
-This tutorial demonstrates how to deploy a set of http servers across multiple clusters and observe anycast application routing over a Virtual Application Network.
+This tutorial demonstrates how to deploy a set of http servers across multiple clusters and observe load balancing over a Virtual Application Network.
 
-In this tutorial, you will deploy http servers to both a public and a private cluster. You will also create http clients that will access the http servers via the same address. You will observe how the VAN supports anycast application addressing by balancing client requests across the https servers on both the public and private cluster.
+In this tutorial, you will deploy http servers to both a public and a private cluster. You will also create HTTP clients that will access the HTTP servers via the same address. You will observe how the VAN supports balancing client requests across the HTTP servers on both the public and private cluster.
 
 ## Prerequisites
 
