@@ -406,7 +406,7 @@ deployment.apps/http-client created
 
 ## Step 12: Review the client logs
 
-The client pods contain logs showing which server reponded to requests.
+The client pods contain logs showing which server responded to requests.
 Use the `kubectl logs` command to inspect these logs and see how the traffic
 was balanced.
 
