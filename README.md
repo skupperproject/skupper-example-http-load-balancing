@@ -4,6 +4,10 @@ This tutorial demonstrates how to deploy a set of http servers across multiple c
 
 In this tutorial, you will deploy http servers to both a public and a private cluster. You will also create http clients that will access the http servers via the same address. You will observe how the VAN supports anycast application addressing by balancing client requests across the https servers on both the public and private cluster.
 
+An example deployment topolgy that you will work towards in this tutorial is as follows:
+
+![](docs/images/anycast_routing_topology.png)
+
 To complete this tutorial, do the following:
 
 * [Prerequisites](#prerequisites)
@@ -16,6 +20,7 @@ To complete this tutorial, do the following:
 * [Step 7: Review HTTP client metrics](#step-7-review-http-client-metrics)
 * [Cleaning up](#cleaning-up)
 * [Next steps](#next-steps)
+
 
 ## Prerequisites
 
@@ -52,7 +57,7 @@ On each cluster, define the virtual application network and the connectivity for
 1. In the terminal for the first public cluster, deploy the **public1** application router and create three connection tokens for linking from the **public2** cluster, the **private1** cluster and the **private2** cluster:
 
    ```bash
-   skupper init --site-name public1
+   skupper init --site-name public1 --site-name public1 --enable-console --enable-flow-collector
    skupper token create private1-to-public1-token.yaml
    skupper token create private2-to-public1-token.yaml
    skupper token create public2-to-public1-token.yaml
@@ -83,6 +88,10 @@ On each cluster, define the virtual application network and the connectivity for
    skupper link create private2-to-public2-token.yaml
    ```
 
+   At this point, you should see a network topology similar to the following:
+
+    ![](docs/images/anycast_routing_links_created.png)
+
 ## Step 3: Deploy the HTTP service
 
 After creating the application router network, deploy the HTTP services. The **private1** and **public1** clusters will be used to deploy the HTTP servers and the **public2** and **private2** clusters will be used to enable client http communications to the servers.
@@ -99,6 +108,8 @@ After creating the application router network, deploy the HTTP services. The **p
    kubectl apply -f ~/http-demo/skupper-example-http-load-balancing/server.yaml
    ```
 
+   ![](docs/images/http_servers_added.png)
+
 ## Step 4: Create Skupper service for the Virtual Application Network
 
 1. In the terminal for the **public1** cluster, create the httpsvc service:
@@ -106,6 +117,7 @@ After creating the application router network, deploy the HTTP services. The **p
    ```bash
    skupper service create httpsvc 8080 --mapping http
    ```
+   ![](docs/images/skupper_service_created.png)
 
 2. In each of the cluster terminals, verify the service created is present
 
@@ -126,6 +138,10 @@ After creating the application router network, deploy the HTTP services. The **p
    ```bash
    skupper service bind httpsvc deployment http-server
    ```
+
+   Notice the change in the type of *process*  (from *unexposed* to *exposed*):
+
+   ![](docs/images/skupper_service_binding.png)
 
 ## Step 6: Deploy HTTP client
 
@@ -158,6 +174,9 @@ served the request and calculates the rates per server-pod.
    ```bash
    kubectl logs $(kubectl get pod -l application=http-client -o=jsonpath='{.items[0].metadata.name}')
    ```
+   ![](docs/images/http_client_deployed.png)
+
+   Notice that requests from the two http clients (in *public2* and *private2*) are now load-balanced to all replicas of the http servers at each site (*public1* and *private1).
 
 ## Cleaning Up
 
